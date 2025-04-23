@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chloe's Crumbs</title>
+  <style>
+    body {
+      background: url("IMG_4971.jpeg") no-repeat center center fixed !important;
+      background-size: cover !important;
+      background-color: #222 !important; /* fallback color */
+      color: white;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      margin: 0;
+      height: 100vh;
+    }
+
+    canvas {
+      border: 3px solid #00ccff;
+      background-color: rgba(0, 0, 0, 0.7);
+    }
+
+    #status {
+      margin-top: 10px;
+      font-size: 1.2em;
+    }
+
+    #win-popup {
+      position: absolute;
+      top: 60px;
+      display: none;
+    }
+
+    #win-popup img {
+      width: 200px;
+      border: 3px solid white;
+      border-radius: 8px;
+    }
+
+    .home-link {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 8px 12px;
+      border-radius: 8px;
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .home-link:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <a class="home-link" href="../index.html">← Back to Home</a>
+  <h1>Chloe's Crumbs</h1>
+  <canvas id="game" width="160" height="320"></canvas>
+  <div id="status">Arrow keys to move, SPACE to rotate</div>
+  <div id="win-popup">
+    <img src="IMG_4971.jpeg" alt="You Win!" />
+  </div>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const tileSize = 20;
+    const cols = 8;
+    const rows = 16;
+
+    const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+    const viruses = [];
+
+    const colorMap = [
+      '#000000', // 0 - empty
+      '#ff4d4d', // 1 - red pill
+      '#4dd2ff', // 2 - blue pill
+      '#ffff66', // 3 - yellow pill
+      '#cc0000', // 4 - red virus
+      '#0066cc', // 5 - blue virus
+      '#cccc00'  // 6 - yellow virus
+    ];
+
+    function placeViruses(n = 6) {
+      const virusColors = [4, 5, 6];
+      while (viruses.length < n) {
+        const row = Math.floor(Math.random() * (rows - 6)) + 6;
+        const col = Math.floor(Math.random() * cols);
+        if (grid[row][col] === 0) {
+          const color = virusColors[Math.floor(Math.random() * 3)];
+          grid[row][col] = color;
+          viruses.push({ row, col });
+        }
+      }
+    }
+
+    placeViruses();
+
+    let pill = {};
+    let isClearing = false;
+    let gameWon = false;
+
+    function spawnNewPill() {
+      const colors = [1, 2, 3];
+      pill = {
+        parts: [
+          { row: 0, col: 3, color: colors[Math.floor(Math.random() * 3)] },
+          { row: 0, col: 4, color: colors[Math.floor(Math.random() * 3)] },
+        ],
+      };
+    }
+
+    function drawTile(row, col, colorCode) {
+      ctx.fillStyle = colorMap[colorCode] || '#000';
+      ctx.fillRect(col * tileSize, row * tileSize, tileSize - 1, tileSize - 1);
+
+      if (colorCode >= 4 && colorCode <= 6) {
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(col * tileSize, row * tileSize, tileSize, tileSize);
+      }
+    }
+
+    function drawGrid() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          drawTile(r, c, grid[r][c]);
+        }
+      }
+      pill.parts.forEach(p => drawTile(p.row, p.col, p.color));
+    }
+
+    function canMove(parts, dr, dc) {
+      return parts.every(p => {
+        const newR = p.row + dr;
+        const newC = p.col + dc;
+        return newR < rows && newC >= 0 && newC < cols && grid[newR][newC] === 0;
+      });
+    }
+
+    function movePill(dr, dc) {
+      const movedParts = pill.parts.map(p => ({ ...p, row: p.row + dr, col: p.col + dc }));
+      if (canMove(pill.parts, dr, dc)) {
+        pill.parts = movedParts;
+      } else if (dr === 1) {
+        pill.parts.forEach(p => {
+          grid[p.row][p.col] = p.color;
+        });
+        isClearing = true;
+      }
+    }
+
+    function rotatePill() {
+      const [a, b] = pill.parts;
+      const dir = { row: b.row - a.row, col: b.col - a.col };
+      const newDir = { row: -dir.col, col: dir.row };
+      const rotated = [a, { row: a.row + newDir.row, col: a.col + newDir.col, color: b.color }];
+
+      if (canMove(rotated, 0, 0)) {
+        pill.parts = rotated;
+      }
+    }
+
+    function sameColor(val1, val2) {
+      const groups = [
+        [1, 4],
+        [2, 5],
+        [3, 6],
+      ];
+      return groups.some(group => group.includes(val1) && group.includes(val2));
+    }
+
+    function checkMatchesAndClear() {
+      const toClear = new Set();
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const val = grid[r][c];
+          if (val === 0) continue;
+
+          let group = [[r, c]];
+          for (let i = 1; i < 4 && c + i < cols; i++) {
+            if (sameColor(val, grid[r][c + i])) group.push([r, c + i]);
+            else break;
+          }
+          if (group.length >= 4) group.forEach(([r, c]) => toClear.add(`${r},${c}`));
+
+          group = [[r, c]];
+          for (let i = 1; i < 4 && r + i < rows; i++) {
+            if (sameColor(val, grid[r + i][c])) group.push([r + i, c]);
+            else break;
+          }
+          if (group.length >= 4) group.forEach(([r, c]) => toClear.add(`${r},${c}`));
+        }
+      }
+
+      if (toClear.size > 0) {
+        toClear.forEach(pos => {
+          const [r, c] = pos.split(',').map(Number);
+          grid[r][c] = 0;
+        });
+
+        for (let i = viruses.length - 1; i >= 0; i--) {
+          const { row, col } = viruses[i];
+          if (grid[row][col] === 0) {
+            viruses.splice(i, 1);
+          }
+        }
+        return true;
+      }
+      return false;
+    }
+
+    function applyGravity() {
+      for (let c = 0; c < cols; c++) {
+        for (let r = rows - 2; r >= 0; r--) {
+          if (grid[r][c] >= 1 && grid[r][c] <= 3) {
+            let rowBelow = r;
+            while (rowBelow + 1 < rows && grid[rowBelow + 1][c] === 0) {
+              rowBelow++;
+            }
+            if (rowBelow !== r) {
+              grid[rowBelow][c] = grid[r][c];
+              grid[r][c] = 0;
+            }
+          }
+        }
+      }
+    }
+
+    function showWinPopup() {
+      const popup = document.getElementById("win-popup");
+      popup.style.display = "block";
+      setTimeout(() => {
+        location.reload();
+      }, 3000);
+    }
+
+    let dropCounter = 0;
+    let dropInterval = 500;
+    let lastTime = 0;
+
+    function update(time = 0) {
+      if (gameWon) return;
+
+      const delta = time - lastTime;
+      lastTime = time;
+      dropCounter += delta;
+
+      if (dropCounter > dropInterval) {
+        dropCounter = 0;
+
+        if (isClearing) {
+          const didClear = checkMatchesAndClear();
+          if (didClear) {
+            applyGravity();
+          } else {
+            isClearing = false;
+            if (viruses.length === 0) {
+              document.getElementById("status").textContent = "YOU WIN!";
+              gameWon = true;
+              showWinPopup();
+              return;
+            }
+            spawnNewPill();
+          }
+        } else {
+          movePill(1, 0);
+        }
+      }
+
+      drawGrid();
+      requestAnimationFrame(update);
+    }
+
+    document.addEventListener("keydown", e => {
+      if (e.key === "ArrowLeft") movePill(0, -1);
+      else if (e.key === "ArrowRight") movePill(0, 1);
+      else if (e.key === "ArrowDown") movePill(1, 0);
+      else if (e.key === " ") rotatePill();
+    });
+
+    spawnNewPill();
+    update();
+  </script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+	"folders": [
+		{
+			"path": "../assets"
+		},
+		{
+			"path": "../css"
+		},
+		{
+			"path": "../js"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../../startbootstrap-grayscale-gh-pages/assets"
+		},
+		{
+			"path": "../../startbootstrap-grayscale-gh-pages/css"
+		},
+		{
+			"path": "../../startbootstrap-grayscale-gh-pages/js"
+		}
+	]
+}
